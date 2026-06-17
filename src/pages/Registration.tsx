@@ -9,7 +9,6 @@ export default function Registration() {
   const [selectedRoute, setSelectedRoute] = useState<string | null>(null)
   const [showCommitment, setShowCommitment] = useState(false)
   const [showFamilyCommitment, setShowFamilyCommitment] = useState(false)
-  const [registered, setRegistered] = useState<string | null>(null)
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
   const [isFamily, setIsFamily] = useState(false)
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
@@ -62,6 +61,10 @@ export default function Registration() {
 
   const handlePaceSelect = (paceGroupId: string) => {
     if (!selectedRoute) return
+    if (!healthCommitted) {
+      setShowCommitment(true)
+      return
+    }
     if (isFinished(currentUserId, selectedRoute)) {
       alert('你已完赛，报名信息不可修改')
       return
@@ -76,7 +79,6 @@ export default function Registration() {
       return
     }
     addRegistration(selectedRoute, paceGroupId, isFamily, familyMembers)
-    setRegistered(paceGroupId)
   }
 
   const getStatusBadge = (status: string) => {
@@ -198,6 +200,21 @@ export default function Registration() {
                 )}
               </div>
 
+              {!healthCommitted && (
+                <div className="mb-6 p-5 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-amber-400 mb-1">请先确认健康承诺</h3>
+                    <p className="text-sm text-gray-400 mb-3">报名前需确认健康承诺，未确认不可选择配速组</p>
+                    <button onClick={() => setShowCommitment(true)} className="px-5 py-2 bg-[#FF6B35] hover:bg-[#e85a25] text-white rounded-xl font-semibold text-sm shadow-lg shadow-orange-500/25 transition-all active:scale-95">
+                      去确认
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <h2 className="text-xl font-bold mb-4">选择配速组</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {groups.map((g) => {
@@ -205,8 +222,10 @@ export default function Registration() {
                   const confirmedCount = gRegs.filter((r) => r.status === 'confirmed').length
                   const full = isGroupFull(g.id)
                   const remaining = g.capacity - confirmedCount
+                  const isSelected = myReg?.paceGroupId === g.id
+                  const disabled = !healthCommitted || !!myReg
                   return (
-                    <button key={g.id} onClick={() => handlePaceSelect(g.id)} disabled={!!registered} className={`relative text-left border rounded-2xl p-5 transition-all ${full ? 'border-white/5 bg-white/[0.02] opacity-75' : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]'} ${registered === g.id ? 'ring-2 ring-[#FF6B35]' : ''}`}>
+                    <button key={g.id} onClick={() => handlePaceSelect(g.id)} disabled={disabled} className={`relative text-left border rounded-2xl p-5 transition-all ${full ? 'border-white/5 bg-white/[0.02] opacity-75' : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]'} ${disabled && !isSelected ? 'cursor-not-allowed opacity-60' : ''} ${isSelected ? 'ring-2 ring-[#FF6B35]' : ''}`}>
                       <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl" style={{ backgroundColor: g.color }} />
                       <div className="flex items-center gap-2 mb-3">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: g.color }} />
@@ -217,7 +236,7 @@ export default function Registration() {
                         <span className={full ? 'text-amber-400 font-semibold' : 'text-white font-semibold'}>{full ? 0 : remaining}</span>
                       </div>
                       {full && <div className="mt-2 flex items-center gap-1 text-xs text-amber-400"><AlertCircle className="w-3 h-3" />已满，将进入候补</div>}
-                      {registered === g.id && <div className="mt-2 text-xs text-[#FF6B35] font-semibold">已选择</div>}
+                      {isSelected && <div className="mt-2 text-xs text-[#FF6B35] font-semibold">已选择</div>}
                     </button>
                   )
                 })}
