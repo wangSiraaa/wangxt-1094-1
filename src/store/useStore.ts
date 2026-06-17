@@ -31,7 +31,15 @@ interface AppState {
   addFinishRecord: (registrationId: string, routeId: string, memberId: string, memberName: string, finishTime: string, finishType: FinishType, note: string) => void
   addCheckIn: (registrationId: string, routeId: string, memberId: string, memberName: string, location: string) => void
   triggerWeatherAlert: (routeId: string, type: WeatherType, description: string) => void
-  autoReschedule: (weatherAlertId: string) => void
+  autoReschedule: (weatherAlertId: string) => {
+    rescheduledCount: number
+    excludedCount: number
+    excludedByCheckIn: number
+    excludedByFinish: number
+    excludedByStatus: number
+    paceGroupsPreserved: number
+    backupRouteId: string | null
+  }
   getMemberArchive: (memberId: string) => MemberArchive[]
   isGroupFull: (paceGroupId: string) => boolean
   getGroupRegistrations: (paceGroupId: string) => Registration[]
@@ -151,15 +159,36 @@ export const useStore = create<AppState>((set, get) => ({
   autoReschedule: (weatherAlertId) => {
     const state = get()
     const alert = state.weatherAlerts.find((a) => a.id === weatherAlertId)
-    if (!alert) return
+    if (!alert) return { rescheduledCount: 0, excludedCount: 0, excludedByCheckIn: 0, excludedByFinish: 0, excludedByStatus: 0, paceGroupsPreserved: 0, backupRouteId: null }
     const route = state.routes.find((r) => r.id === alert.routeId)
-    if (!route) return
+    if (!route) return { rescheduledCount: 0, excludedCount: 0, excludedByCheckIn: 0, excludedByFinish: 0, excludedByStatus: 0, paceGroupsPreserved: 0, backupRouteId: null }
 
-    const regsToReschedule = state.registrations.filter(
-      (r) => r.routeId === alert.routeId && r.status !== 'finished'
-    )
+    const routeRegs = state.registrations.filter((r) => r.routeId === alert.routeId)
+    let excludedByCheckIn = 0
+    let excludedByFinish = 0
+    let excludedByStatus = 0
+    const regsToReschedule = routeRegs.filter((r) => {
+      const hasCheckIn = state.checkIns.some((c) => c.registrationId === r.id)
+      if (hasCheckIn) {
+        excludedByCheckIn++
+        return false
+      }
+      const hasFinishRecord = state.finishRecords.some((f) => f.registrationId === r.id)
+      if (hasFinishRecord) {
+        excludedByFinish++
+        return false
+      }
+      if (r.status === 'finished') {
+        excludedByStatus++
+        return false
+      }
+      return true
+    })
+    const excludedCount = excludedByCheckIn + excludedByFinish + excludedByStatus
 
-    if (regsToReschedule.length === 0) return
+    if (regsToReschedule.length === 0) {
+      return { rescheduledCount: 0, excludedCount, excludedByCheckIn, excludedByFinish, excludedByStatus, paceGroupsPreserved: 0, backupRouteId: null }
+    }
 
     let backupRoute = state.routes.find(
       (r) => r.id !== alert.routeId && r.distance === route.backupDistance
@@ -174,7 +203,7 @@ export const useStore = create<AppState>((set, get) => ({
         backupDistance: route.backupDistance,
         startLocation: route.startLocation,
         startTime: route.startTime,
-        description: `因${alert.type === 'high_temp' ? '高温' : '降雨'}天气启用的备用路线`,
+        description: `因${alert.type === 'high_temp' ? '高温' : alert.type === 'rain' ? '降雨' : '暴风'}天气启用的备用路线`,
         leaderId: route.leaderId,
         weatherAlertId,
       }
@@ -189,22 +218,26 @@ export const useStore = create<AppState>((set, get) => ({
       }))
     }
 
+    const regsToRescheduleIds = new Set(regsToReschedule.map((r) => r.id))
     const updatedState = get()
     const backupGroups = updatedState.paceGroups.filter((g) => g.routeId === backupRoute!.id)
     const newLogs: RescheduleLog[] = []
+    let paceGroupsPreserved = 0
     const updatedRegs = updatedState.registrations.map((r) => {
-      if (r.routeId !== alert.routeId || r.status === 'finished') return r
+      if (!regsToRescheduleIds.has(r.id)) return r
       const originalGroup = updatedState.paceGroups.find((g) => g.id === r.paceGroupId)
       const matchingBackupGroup = originalGroup
-        ? backupGroups.find((bg) => bg.paceRange === originalGroup.paceRange) || backupGroups[0]
-        : backupGroups[0]
-      if (!matchingBackupGroup) return r
+        ? backupGroups.find((bg) => bg.paceRange === originalGroup.paceRange)
+        : null
+      const targetGroup = matchingBackupGroup || backupGroups[0]
+      if (!targetGroup) return r
+      if (matchingBackupGroup) paceGroupsPreserved++
       newLogs.push({
         id: genId('rl'),
         fromRouteId: r.routeId,
         fromPaceGroupId: r.paceGroupId,
         toRouteId: backupRoute!.id,
-        toPaceGroupId: matchingBackupGroup.id,
+        toPaceGroupId: targetGroup.id,
         weatherAlertId,
         registrationId: r.id,
         rescheduledAt: new Date().toISOString(),
@@ -212,7 +245,7 @@ export const useStore = create<AppState>((set, get) => ({
       return {
         ...r,
         routeId: backupRoute!.id,
-        paceGroupId: matchingBackupGroup.id,
+        paceGroupId: targetGroup.id,
         rescheduledFromRouteId: r.routeId,
         rescheduledFromPaceGroupId: r.paceGroupId,
         rescheduledAt: new Date().toISOString(),
@@ -223,6 +256,16 @@ export const useStore = create<AppState>((set, get) => ({
       registrations: updatedRegs,
       rescheduleLogs: [...s.rescheduleLogs, ...newLogs],
     }))
+
+    return {
+      rescheduledCount: regsToReschedule.length,
+      excludedCount,
+      excludedByCheckIn,
+      excludedByFinish,
+      excludedByStatus,
+      paceGroupsPreserved,
+      backupRouteId: backupRoute.id,
+    }
   },
 
   getMemberArchive: (memberId) => {
@@ -242,6 +285,13 @@ export const useStore = create<AppState>((set, get) => ({
         : null
       const fromGroup = reg.rescheduledFromPaceGroupId
         ? state.paceGroups.find((g) => g.id === reg.rescheduledFromPaceGroupId)
+        : null
+      const checkInsWithRouteName = checkIns.map((ck) => ({
+        ...ck,
+        routeName: state.routes.find((r) => r.id === ck.routeId)?.name || '',
+      }))
+      const finishWithRouteName = finish
+        ? { ...finish, routeName: state.routes.find((r) => r.id === finish.routeId)?.name || '' }
         : null
       return {
         memberId,
@@ -263,8 +313,8 @@ export const useStore = create<AppState>((set, get) => ({
         weatherAlert: weatherAlert
           ? { type: weatherAlert.type, description: weatherAlert.description }
           : null,
-        checkIns,
-        finishRecord: finish || null,
+        checkIns: checkInsWithRouteName,
+        finishRecord: finishWithRouteName,
       } as MemberArchive
     })
   },

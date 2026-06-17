@@ -89,6 +89,14 @@ export interface CheckInRecord {
   location: string
 }
 
+export interface OriginalRouteEvidence {
+  routeId: string
+  routeName: string
+  distance: number
+  checkIns: CheckInRecord[]
+  finishRecord: FinishRecord | null
+}
+
 export interface MemberArchive {
   memberId: string
   memberName: string
@@ -105,8 +113,8 @@ export interface MemberArchive {
   familyMembers: FamilyMember[]
   rescheduledFrom: { routeId: string; routeName: string; paceGroupId: string; paceRange: string } | null
   weatherAlert: { type: WeatherType; description: string } | null
-  checkIns: CheckInRecord[]
-  finishRecord: FinishRecord | null
+  checkIns: (CheckInRecord & { routeName: string })[]
+  finishRecord: (FinishRecord & { routeName: string }) | null
 }
 
 export type Role = 'leader' | 'member' | 'volunteer'

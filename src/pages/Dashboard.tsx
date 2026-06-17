@@ -3,7 +3,7 @@ import { useStore } from '@/store/useStore'
 import type { WeatherType } from '@/types'
 
 export default function Dashboard() {
-  const { routes, paceGroups, registrations, weatherAlerts, rescheduleLogs } = useStore()
+  const { routes, paceGroups, registrations, weatherAlerts, rescheduleLogs, checkIns, finishRecords } = useStore()
 
   const activeAlerts = weatherAlerts.filter((a) => a.active)
   const allReschedules = rescheduleLogs
@@ -70,7 +70,12 @@ export default function Dashboard() {
             {activeAlerts.map((alert) => {
               const route = routes.find((r) => r.id === alert.routeId)
               const routeRegs = registrations.filter((r) => r.routeId === alert.routeId)
-              const affectedCount = routeRegs.filter((r) => r.status !== 'finished').length
+              const notStartedCount = routeRegs.filter((r) => {
+                if (finishRecords.some((f) => f.registrationId === r.id)) return false
+                if (checkIns.some((c) => c.registrationId === r.id)) return false
+                if (r.status === 'finished') return false
+                return true
+              }).length
               const alertReschedules = allReschedules.filter((l) => l.weatherAlertId === alert.id)
               return (
                 <div key={alert.id} className={`p-4 border rounded-xl ${getWeatherBg(alert.type)}`}>
@@ -81,7 +86,7 @@ export default function Dashboard() {
                   </div>
                   <p className="text-sm text-gray-400 mb-2">{alert.description}</p>
                   <div className="flex items-center gap-4 text-xs">
-                    <span className="text-gray-500">受影响队员：<span className="text-white font-semibold">{affectedCount}</span>人</span>
+                    <span className="text-gray-500">未出发队员：<span className="text-white font-semibold">{notStartedCount}</span>人</span>
                     <span className="text-gray-500">已改签：<span className="text-emerald-400 font-semibold">{alertReschedules.length}</span>人</span>
                     {route && <span className="text-gray-500">备用里程：<span className="text-white font-semibold">{route.backupDistance}km</span></span>}
                   </div>

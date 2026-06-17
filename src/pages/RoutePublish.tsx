@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MapPin, Clock, Route as RouteIcon, Plus, ChevronDown, ChevronUp, ThermometerSun, CloudRain, CloudLightning, AlertTriangle, ArrowRightLeft, CheckCircle2 } from 'lucide-react'
+import { MapPin, Clock, Route as RouteIcon, Plus, ChevronDown, ChevronUp, ThermometerSun, CloudRain, CloudLightning, AlertTriangle, ArrowRightLeft, CheckCircle2, Users, XCircle, UserCheck } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import type { WeatherType } from '@/types'
 
@@ -10,12 +10,20 @@ const weatherTypeOptions: { value: WeatherType; label: string; icon: React.React
 ]
 
 export default function RoutePublish() {
-  const { routes, paceGroups, registrations, weatherAlerts, rescheduleLogs, addRoute, triggerWeatherAlert, autoReschedule, role } = useStore()
+  const { routes, paceGroups, registrations, weatherAlerts, rescheduleLogs, checkIns, finishRecords, addRoute, triggerWeatherAlert, autoReschedule, role } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null)
   const [showWeatherForm, setShowWeatherForm] = useState<string | null>(null)
   const [weatherForm, setWeatherForm] = useState({ type: 'high_temp' as WeatherType, description: '' })
-  const [rescheduleMsg, setRescheduleMsg] = useState('')
+  const [rescheduleResult, setRescheduleResult] = useState<{
+    show: boolean
+    rescheduledCount: number
+    excludedCount: number
+    excludedByCheckIn: number
+    excludedByFinish: number
+    excludedByStatus: number
+    paceGroupsPreserved: number
+  } | null>(null)
   const [form, setForm] = useState({ name: '', distance: 5, backupDistance: 3, startLocation: '', startTime: '', description: '' })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -35,9 +43,9 @@ export default function RoutePublish() {
   }
 
   const handleAutoReschedule = (alertId: string) => {
-    autoReschedule(alertId)
-    setRescheduleMsg('改签完成！未出发队员已自动迁至备用里程，配速分组已保留。')
-    setTimeout(() => setRescheduleMsg(''), 4000)
+    const result = autoReschedule(alertId)
+    setRescheduleResult({ show: true, ...result })
+    setTimeout(() => setRescheduleResult(null), 6000)
   }
 
   const getWeatherIcon = (type: string) => {
@@ -68,9 +76,40 @@ export default function RoutePublish() {
         )}
       </div>
 
-      {rescheduleMsg && (
-        <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2 text-emerald-400">
-          <CheckCircle2 className="w-5 h-5" />{rescheduleMsg}
+      {rescheduleResult && rescheduleResult.show && (
+        <div className="mb-6 p-5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+          <div className="flex items-center gap-2 text-emerald-400 font-semibold mb-3">
+            <CheckCircle2 className="w-5 h-5" />
+            自动改签完成
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-xs text-gray-400 mb-1">成功改签</div>
+              <div className="text-lg font-bold text-emerald-400 flex items-center gap-1.5">
+                <ArrowRightLeft className="w-4 h-4" />
+                {rescheduleResult.rescheduledCount} 人
+              </div>
+            </div>
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-xs text-gray-400 mb-1">配速组保留</div>
+              <div className="text-lg font-bold text-[#2EC4B6] flex items-center gap-1.5">
+                <UserCheck className="w-4 h-4" />
+                {rescheduleResult.paceGroupsPreserved} 人
+              </div>
+            </div>
+            <div className="p-3 bg-white/5 rounded-lg">
+              <div className="text-xs text-gray-400 mb-1">排除人数</div>
+              <div className="text-lg font-bold text-amber-400 flex items-center gap-1.5">
+                <XCircle className="w-4 h-4" />
+                {rescheduleResult.excludedCount} 人
+              </div>
+            </div>
+            <div className="p-3 bg-white/5 rounded-lg text-xs text-gray-400 space-y-1">
+              <div className="flex justify-between"><span>· 已签到</span><span className="text-gray-300">{rescheduleResult.excludedByCheckIn}人</span></div>
+              <div className="flex justify-between"><span>· 已完赛</span><span className="text-gray-300">{rescheduleResult.excludedByFinish}人</span></div>
+              <div className="flex justify-between"><span>· 状态结束</span><span className="text-gray-300">{rescheduleResult.excludedByStatus}人</span></div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -116,9 +155,12 @@ export default function RoutePublish() {
           const regs = registrations.filter((r) => r.routeId === route.id)
           const totalCap = groups.reduce((s, g) => s + g.capacity, 0)
           const confirmedCount = regs.filter((r) => r.status === 'confirmed').length
+          const checkedInCount = regs.filter((r) => checkIns.some((c) => c.registrationId === r.id)).length
+          const notStartedCount = regs.length - checkedInCount
           const isExpanded = expandedRoute === route.id
           const alert = weatherAlerts.find((a) => a.routeId === route.id && a.active)
           const routeReschedules = rescheduleLogs.filter((l) => l.fromRouteId === route.id)
+          const rescheduledInCount = rescheduleLogs.filter((l) => l.toRouteId === route.id).length
           return (
             <div key={route.id} className="group bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-all hover:shadow-xl hover:shadow-black/20" style={{ animationDelay: `${idx * 80}ms` }}>
               <div className={`h-1.5 ${alert ? 'bg-gradient-to-r from-red-500 via-red-400 to-amber-400' : 'bg-gradient-to-r from-[#FF6B35] via-[#F4845F] to-[#2EC4B6]'}`} />
@@ -166,6 +208,24 @@ export default function RoutePublish() {
                   <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-[#FF6B35] to-[#2EC4B6] rounded-full transition-all" style={{ width: `${Math.min((confirmedCount / totalCap) * 100, 100)}%` }} />
                   </div>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 text-xs">
+                  <span className="flex items-center gap-1 text-emerald-400">
+                    <UserCheck className="w-3 h-3" />已签到 {checkedInCount}
+                  </span>
+                  <span className="text-gray-600">·</span>
+                  <span className="flex items-center gap-1 text-gray-400">
+                    <Users className="w-3 h-3" />未出发 {notStartedCount}
+                  </span>
+                  {rescheduledInCount > 0 && (
+                    <>
+                      <span className="text-gray-600">·</span>
+                      <span className="flex items-center gap-1 text-amber-400">
+                        <ArrowRightLeft className="w-3 h-3" />改入 {rescheduledInCount}
+                      </span>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-3 flex gap-2">

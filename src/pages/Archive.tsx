@@ -168,7 +168,12 @@ export default function Archive() {
                           <div key={ck.id} className="flex items-center justify-between px-3 py-2 bg-white/5 rounded-lg text-xs">
                             <div className="flex items-center gap-2">
                               <MapPinned className="w-3 h-3 text-[#2EC4B6]" />
-                              <span className="text-gray-300">{ck.location}</span>
+                              <div>
+                                <span className="text-gray-300">{ck.location}</span>
+                                {archive.rescheduledFrom && ck.routeName !== archive.routeName && (
+                                  <div className="text-[10px] text-gray-500">归属：{ck.routeName}</div>
+                                )}
+                              </div>
                             </div>
                             <span className="text-gray-500">{new Date(ck.checkInTime).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
@@ -189,6 +194,12 @@ export default function Archive() {
                           <span className="text-xs text-gray-500">完赛类型</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${finishInfo?.color}`}>{finishInfo?.label}</span>
                         </div>
+                        {archive.rescheduledFrom && archive.finishRecord.routeName !== archive.routeName && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">记录归属</span>
+                            <span className="text-xs text-amber-400">{archive.finishRecord.routeName}</span>
+                          </div>
+                        )}
                         {archive.finishRecord.note && (
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-gray-500">备注</span>
