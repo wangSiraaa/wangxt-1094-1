@@ -1,10 +1,18 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { MapPin, Users, Trophy, Flag } from 'lucide-react'
+import { LayoutDashboard, MapPin, Users, Trophy, FileText, Flag } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import type { Role } from '@/types'
 
 const roleLabels: Record<Role, string> = { leader: '领队', member: '队员', volunteer: '志愿者' }
 const roleColors: Record<Role, string> = { leader: 'bg-orange-500', member: 'bg-emerald-500', volunteer: 'bg-sky-500' }
+
+const navItems = [
+  { to: '/', icon: LayoutDashboard, label: '总览' },
+  { to: '/routes', icon: MapPin, label: '路线' },
+  { to: '/registration', icon: Users, label: '报名' },
+  { to: '/finish', icon: Trophy, label: '完赛' },
+  { to: '/archive', icon: FileText, label: '档案' },
+]
 
 export default function Layout() {
   const { role, setRole } = useStore()
@@ -20,15 +28,16 @@ export default function Layout() {
             </span>
           </div>
           <nav className="flex items-center gap-1">
-            <NavLink to="/" className={({ isActive }) => `flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-white/15 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-              <MapPin className="w-4 h-4" />路线
-            </NavLink>
-            <NavLink to="/registration" className={({ isActive }) => `flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-white/15 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-              <Users className="w-4 h-4" />报名
-            </NavLink>
-            <NavLink to="/finish" className={({ isActive }) => `flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-white/15 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-              <Trophy className="w-4 h-4" />完赛
-            </NavLink>
+            {navItems.map(({ to, icon: Icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) => `flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-white/15 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              >
+                <Icon className="w-4 h-4" />{label}
+              </NavLink>
+            ))}
           </nav>
           <div className="flex items-center gap-1.5 bg-white/5 rounded-lg p-1">
             {(Object.keys(roleLabels) as Role[]).map((r) => (
